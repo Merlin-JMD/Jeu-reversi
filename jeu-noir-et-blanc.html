@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Othello — École de pensée Tesla</title>
+<style>
+  :root {
+    --bois-fonce: #2b1d12;
+    --bois-moyen: #4a3420;
+    --bois-clair: #6b4c2a;
+    --vert-tapis: #1e5c3a;
+    --vert-case: #267349;
+    --vert-clair: #2f8a58;
+    --or: #c9a24b;
+    --creme: #ede3cf;
+    --noir-pion: #16161a;
+    --blanc-pion: #f2efe6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: radial-gradient(ellipse at 50% 20%, #3a2a18 0%, var(--bois-fonce) 70%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--creme);
+    padding: 12px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  h1 {
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    letter-spacing: 0.15em;
+    color: var(--or);
+    margin: 8px 0 2px;
+    font-weight: normal;
+  }
+  .sous-titre {
+    font-size: 0.8rem;
+    color: #a08c6a;
+    font-style: italic;
+    margin-bottom: 12px;
+  }
+  .panneau {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  select, button {
+    font-family: inherit;
+    font-size: 0.9rem;
+    background: var(--bois-moyen);
+    color: var(--creme);
+    border: 1px solid var(--or);
+    border-radius: 6px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  select:hover, button:hover { background: var(--bois-clair); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+  .scores {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1.05rem;
+  }
+  .score-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  .score-item.actif {
+    border-color: var(--or);
+    background: rgba(201, 162, 75, 0.12);
+  }
+  .mini-pion {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .mini-pion.noir { background: radial-gradient(circle at 35% 30%, #3c3c44, var(--noir-pion)); border: 1px solid #000; }
+  .mini-pion.blanc { background: radial-gradient(circle at 35% 30%, #ffffff, #cfc9b8); border: 1px solid #9c957f; }
+  #plateau-cadre {
+    background: linear-gradient(135deg, var(--bois-clair), var(--bois-moyen) 40%, var(--bois-fonce));
+    padding: clamp(8px, 2vw, 16px);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(201,162,75,0.35);
+  }
+  #plateau {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: min(92vw, 520px);
+    height: min(92vw, 520px);
+    background: var(--vert-tapis);
+    border: 2px solid #123a24;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .case {
+    background: var(--vert-case);
+    border: 1px solid #17422a;
+    position: relative;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .case.jouable { cursor: pointer; }
+  .case.jouable::after {
+    content: '';
+    width: 26%; height: 26%;
+    border-radius: 50%;
+    border: 2px solid rgba(201, 162, 75, 0.75);
+    background: rgba(201, 162, 75, 0.15);
+  }
+  .case.jouable:hover { background: var(--vert-clair); }
+  .case.dernier-coup { box-shadow: inset 0 0 0 3px var(--or); }
+  .pion {
+    width: 82%; height: 82%;
+    border-radius: 50%;
+    transition: transform 0.35s ease;
+    transform-style: preserve-3d;
+    position: relative;
+  }
+  .pion .face {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    backface-visibility: hidden;
+  }
+  .pion .face.noir {
+    background: radial-gradient(circle at 35% 30%, #3c3c44, var(--noir-pion));
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.15);
+  }
+  .pion .face.blanc {
+    background: radial-gradient(circle at 35% 30%, #ffffff, #cfc9b8);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 -1px 2px rgba(0,0,0,0.15);
+    transform: rotateY(180deg);
+  }
+  .pion.montre-blanc { transform: rotateY(180deg); }
+  .pion.pose { animation: poser 0.25s ease; }
+  @keyframes poser {
+    from { transform: scale(0.3); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .pion.pose.montre-blanc { animation: poserBlanc 0.25s ease; }
+  @keyframes poserBlanc {
+    from { transform: rotateY(180deg) scale(0.3); opacity: 0; }
+    to { transform: rotateY(180deg) scale(1); opacity: 1; }
+  }
+  #message {
+    margin-top: 12px;
+    min-height: 1.6em;
+    font-size: 1rem;
+    color: var(--or);
+    text-align: center;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pion, .pion.pose { transition: none; animation: none; }
+  }
+</style>
+</head>
+<body>
+  <h1>OTHELLO</h1>
+  <div class="sous-titre">Reversi classique · règles complètes</div>
+
+  <div class="panneau">
+    <select id="sel-couleur" title="Votre couleur">
+      <option value="1" selected>Je joue Noir (commence)</option>
+      <option value="2">Je joue Blanc</option>
+    </select>
+    <select id="sel-niveau" title="Niveau de l'ordinateur">
+      <option value="1">Niveau 1 — Débutant</option>
+      <option value="2" selected>Niveau 2 — Amateur</option>
+      <option value="3">Niveau 3 — Confirmé</option>
+      <option value="4">Niveau 4 — Expert</option>
+    </select>
+    <button id="btn-nouvelle">Nouvelle partie</button>
+    <button id="btn-annuler">Annuler</button>
+  </div>
+
+  <div class="scores">
+    <div class="score-item" id="score-noir">
+      <span class="mini-pion noir"></span><span id="cpt-noir">2</span>
+    </div>
+    <div class="score-item" id="score-blanc">
+      <span class="mini-pion blanc"></span><span id="cpt-blanc">2</span>
+    </div>
+  </div>
+
+  <div id="plateau-cadre"><div id="plateau"></div></div>
+  <div id="message"></div>
+
+<script>
+(() => {
+  const VIDE = 0, NOIR = 1, BLANC = 2;
+  const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+  // Poids positionnels classiques (coins précieux, cases X/C dangereuses)
+  const POIDS = [
+    [120,-20, 20,  5,  5, 20,-20,120],
+    [-20,-40, -5, -5, -5, -5,-40,-20],
+    [ 20, -5, 15,  3,  3, 15, -5, 20],
+    [  5, -5,  3,  3,  3,  3, -5,  5],
+    [  5, -5,  3,  3,  3,  3, -5,  5],
+    [ 20, -5, 15,  3,  3, 15, -5, 20],
+    [-20,-40, -5, -5, -5, -5,-40,-20],
+    [120,-20, 20,  5,  5, 20,-20,120]
+  ];
+
+  // Profondeur de recherche par niveau (niveau 1 = coup glouton bruité)
+  const PROFONDEUR = {1: 1, 2: 2, 3: 4, 4: 6};
+
+  let plateau, tour, couleurHumain, niveau, historique, dernierCoup, partieFinie, iaReflechit;
+
+  const elPlateau = document.getElementById('plateau');
+  const elMessage = document.getElementById('message');
+  const elCptNoir = document.getElementById('cpt-noir');
+  const elCptBlanc = document.getElementById('cpt-blanc');
+  const elScoreNoir = document.getElementById('score-noir');
+  const elScoreBlanc = document.getElementById('score-blanc');
+
+  // --- Logique du jeu ---
+
+  function plateauInitial() {
+    const p = Array.from({length: 8}, () => Array(8).fill(VIDE));
+    p[3][3] = BLANC; p[3][4] = NOIR;
+    p[4][3] = NOIR;  p[4][4] = BLANC;
+    return p;
+  }
+
+  function adversaire(c) { return c === NOIR ? BLANC : NOIR; }
+
+  function pionsRetournes(p, l, c, couleur) {
+    if (p[l][c] !== VIDE) return [];
+    const adv = adversaire(couleur);
+    const retournes = [];
+    for (const [dl, dc] of DIRS) {
+      const ligne = [];
+      let x = l + dl, y = c + dc;
+      while (x >= 0 && x < 8 && y >= 0 && y < 8 && p[x][y] === adv) {
+        ligne.push([x, y]);
+        x += dl; y += dc;
+      }
+      if (ligne.length && x >= 0 && x < 8 && y >= 0 && y < 8 && p[x][y] === couleur) {
+        retournes.push(...ligne);
+      }
+    }
+    return retournes;
+  }
+
+  function coupsLegaux(p, couleur) {
+    const coups = [];
+    for (let l = 0; l < 8; l++)
+      for (let c = 0; c < 8; c++)
+        if (p[l][c] === VIDE && pionsRetournes(p, l, c, couleur).length)
+          coups.push([l, c]);
+    return coups;
+  }
+
+  function jouerCoup(p, l, c, couleur) {
+    const np = p.map(r => r.slice());
+    np[l][c] = couleur;
+    for (const [x, y] of pionsRetournes(p, l, c, couleur)) np[x][y] = couleur;
+    return np;
+  }
+
+  function compter(p) {
+    let n = 0, b = 0;
+    for (const r of p) for (const v of r) { if (v === NOIR) n++; else if (v === BLANC) b++; }
+    return {noir: n, blanc: b};
+  }
+
+  // --- Évaluation & minimax alpha-bêta ---
+
+  function evaluer(p, couleur) {
+    const adv = adversaire(couleur);
+    const {noir, blanc} = compter(p);
+    const total = noir + blanc;
+    const mes = couleur === NOIR ? noir : blanc;
+    const ses = couleur === NOIR ? blanc : noir;
+
+    // Fin de partie : seul le décompte compte
+    if (total === 64 || (!coupsLegaux(p, NOIR).length && !coupsLegaux(p, BLANC).length)) {
+      return (mes - ses) * 10000;
+    }
+
+    let position = 0;
+    for (let l = 0; l < 8; l++)
+      for (let c = 0; c < 8; c++) {
+        if (p[l][c] === couleur) position += POIDS[l][c];
+        else if (p[l][c] === adv) position -= POIDS[l][c];
+      }
+
+    const mobilite = coupsLegaux(p, couleur).length - coupsLegaux(p, adv).length;
+
+    // En fin de partie le matériel prend de l'importance
+    const phaseMateriel = total > 48 ? (mes - ses) * 6 : (mes - ses);
+
+    return position + mobilite * 8 + phaseMateriel;
+  }
+
+  function minimax(p, couleur, profondeur, alpha, beta, maximise, couleurIA) {
+    const coups = coupsLegaux(p, couleur);
+    const advCoups = coupsLegaux(p, adversaire(couleur));
+
+    if (profondeur === 0 || (!coups.length && !advCoups.length)) {
+      return {score: evaluer(p, couleurIA)};
+    }
+    if (!coups.length) {
+      // Passe obligatoire
+      return {score: minimax(p, adversaire(couleur), profondeur - 1, alpha, beta, !maximise, couleurIA).score};
+    }
+
+    let meilleur = null;
+    if (maximise) {
+      let max = -Infinity;
+      for (const [l, c] of coups) {
+        const s = minimax(jouerCoup(p, l, c, couleur), adversaire(couleur), profondeur - 1, alpha, beta, false, couleurIA).score;
+        if (s > max) { max = s; meilleur = [l, c]; }
+        alpha = Math.max(alpha, s);
+        if (beta <= alpha) break;
+      }
+      return {score: max, coup: meilleur};
+    } else {
+      let min = Infinity;
+      for (const [l, c] of coups) {
+        const s = minimax(jouerCoup(p, l, c, couleur), adversaire(couleur), profondeur - 1, alpha, beta, true, couleurIA).score;
+        if (s < min) { min = s; meilleur = [l, c]; }
+        beta = Math.min(beta, s);
+        if (beta <= alpha) break;
+      }
+      return {score: min, coup: meilleur};
+    }
+  }
+
+  function coupIA(p, couleur) {
+    const coups = coupsLegaux(p, couleur);
+    if (!coups.length) return null;
+
+    if (niveau === 1) {
+      // Débutant : glouton avec 35 % de coups aléatoires
+      if (Math.random() < 0.35) return coups[Math.floor(Math.random() * coups.length)];
+      let meilleur = coups[0], max = -Infinity;
+      for (const [l, c] of coups) {
+        const g = pionsRetournes(p, l, c, couleur).length + POIDS[l][c] / 20;
+        if (g > max) { max = g; meilleur = [l, c]; }
+      }
+      return meilleur;
+    }
+
+    // Fin de partie : résolution exacte si peu de cases restantes
+    const {noir, blanc} = compter(p);
+    const vides = 64 - noir - blanc;
+    let prof = PROFONDEUR[niveau];
+    if (niveau >= 3 && vides <= 10) prof = vides;
+
+    const res = minimax(p, couleur, prof, -Infinity, Infinity, true, couleur);
+    return res.coup || coups[0];
+  }
+
+  // --- Interface ---
+
+  function construirePlateau() {
+    elPlateau.innerHTML = '';
+    for (let l = 0; l < 8; l++)
+      for (let c = 0; c < 8; c++) {
+        const div = document.createElement('div');
+        div.className = 'case';
+        div.dataset.l = l;
+        div.dataset.c = c;
+        div.addEventListener('click', () => clicCase(l, c));
+        elPlateau.appendChild(div);
+      }
+  }
+
+  function rendre(coupsJouables = []) {
+    const jouablesSet = new Set(coupsJouables.map(([l, c]) => l * 8 + c));
+    for (const div of elPlateau.children) {
+      const l = +div.dataset.l, c = +div.dataset.c;
+      const v = plateau[l][c];
+      div.classList.toggle('jouable', jouablesSet.has(l * 8 + c));
+      div.classList.toggle('dernier-coup', !!dernierCoup && dernierCoup[0] === l && dernierCoup[1] === c);
+
+      let pion = div.querySelector('.pion');
+      if (v === VIDE) {
+        if (pion) pion.remove();
+        continue;
+      }
+      if (!pion) {
+        pion = document.createElement('div');
+        pion.className = 'pion pose';
+        pion.innerHTML = '<div class="face noir"></div><div class="face blanc"></div>';
+        div.appendChild(pion);
+        requestAnimationFrame(() => pion.classList.toggle('montre-blanc', v === BLANC));
+      } else {
+        pion.classList.remove('pose');
+        pion.classList.toggle('montre-blanc', v === BLANC);
+      }
+    }
+    const {noir, blanc} = compter(plateau);
+    elCptNoir.textContent = noir;
+    elCptBlanc.textContent = blanc;
+    elScoreNoir.classList.toggle('actif', !partieFinie && tour === NOIR);
+    elScoreBlanc.classList.toggle('actif', !partieFinie && tour === BLANC);
+  }
+
+  function message(txt) { elMessage.textContent = txt; }
+
+  function nomCouleur(c) { return c === NOIR ? 'Noir' : 'Blanc'; }
+
+  function finDePartie() {
+    partieFinie = true;
+    const {noir, blanc} = compter(plateau);
+    rendre([]);
+    if (noir === blanc) { message(`Partie nulle — ${noir} à ${blanc}.`); return; }
+    const gagnant = noir > blanc ? NOIR : BLANC;
+    const vous = gagnant === couleurHumain;
+    message(`${nomCouleur(gagnant)} l'emporte ${Math.max(noir, blanc)} à ${Math.min(noir, blanc)}. ${vous ? 'Victoire ! 🏆' : 'L\'ordinateur gagne cette fois.'}`);
+  }
+
+  function avancerTour() {
+    let coups = coupsLegaux(plateau, tour);
+    if (!coups.length) {
+      const autres = coupsLegaux(plateau, adversaire(tour));
+      if (!autres.length) { finDePartie(); return; }
+      message(`${nomCouleur(tour)} passe (aucun coup légal).`);
+      tour = adversaire(tour);
+      coups = autres;
+      setTimeout(() => continuer(coups), 900);
+      return;
+    }
+    continuer(coups);
+  }
+
+  function continuer(coups) {
+    if (partieFinie) return;
+    if (tour === couleurHumain) {
+      rendre(coups);
+      message('À vous de jouer.');
+    } else {
+      rendre([]);
+      message('L\'ordinateur réfléchit…');
+      iaReflechit = true;
+      setTimeout(() => {
+        const coup = coupIA(plateau, tour);
+        iaReflechit = false;
+        if (coup) {
+          historique.push({plateau: plateau.map(r => r.slice()), tour, dernierCoup});
+          plateau = jouerCoup(plateau, coup[0], coup[1], tour);
+          dernierCoup = coup;
+          tour = adversaire(tour);
+        }
+        avancerTour();
+      }, 350);
+    }
+  }
+
+  function clicCase(l, c) {
+    if (partieFinie || iaReflechit || tour !== couleurHumain) return;
+    if (!pionsRetournes(plateau, l, c, tour).length) return;
+    historique.push({plateau: plateau.map(r => r.slice()), tour, dernierCoup});
+    plateau = jouerCoup(plateau, l, c, tour);
+    dernierCoup = [l, c];
+    tour = adversaire(tour);
+    avancerTour();
+  }
+
+  function annuler() {
+    if (iaReflechit || !historique.length) return;
+    // Revenir au dernier état où c'était au joueur humain de jouer
+    let etat;
+    while (historique.length) {
+      etat = historique.pop();
+      if (etat.tour === couleurHumain) break;
+    }
+    if (!etat) return;
+    plateau = etat.plateau;
+    tour = etat.tour;
+    dernierCoup = etat.dernierCoup;
+    partieFinie = false;
+    avancerTour();
+  }
+
+  function nouvellePartie() {
+    couleurHumain = +document.getElementById('sel-couleur').value;
+    niveau = +document.getElementById('sel-niveau').value;
+    plateau = plateauInitial();
+    tour = NOIR;
+    historique = [];
+    dernierCoup = null;
+    partieFinie = false;
+    iaReflechit = false;
+    avancerTour();
+  }
+
+  document.getElementById('btn-nouvelle').addEventListener('click', nouvellePartie);
+  document.getElementById('btn-annuler').addEventListener('click', annuler);
+  document.getElementById('sel-niveau').addEventListener('change', () => {
+    niveau = +document.getElementById('sel-niveau').value;
+  });
+
+  construirePlateau();
+  nouvellePartie();
+})();
+</script>
+</body>
+</html>
