@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -100,10 +100,10 @@
   }
   #plateau {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(8, 1fr);
-    width: min(92vw, 520px);
-    height: min(92vw, 520px);
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    width: min(92vw, 580px);
+    height: min(92vw, 580px);
     background: var(--vert-tapis);
     border: 2px solid #123a24;
     border-radius: 4px;
@@ -207,19 +207,26 @@
 <script>
 (() => {
   const VIDE = 0, NOIR = 1, BLANC = 2;
+  const TAILLE = 10; // Taille du plateau (10x10) — anciennement 8x8
   const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
-  // Poids positionnels classiques (coins précieux, cases X/C dangereuses)
-  const POIDS = [
-    [120,-20, 20,  5,  5, 20,-20,120],
-    [-20,-40, -5, -5, -5, -5,-40,-20],
-    [ 20, -5, 15,  3,  3, 15, -5, 20],
-    [  5, -5,  3,  3,  3,  3, -5,  5],
-    [  5, -5,  3,  3,  3,  3, -5,  5],
-    [ 20, -5, 15,  3,  3, 15, -5, 20],
-    [-20,-40, -5, -5, -5, -5,-40,-20],
-    [120,-20, 20,  5,  5, 20,-20,120]
+  // Table de poids positionnels (coins précieux, cases X/C dangereuses),
+  // généralisée par distance au bord le plus proche : PROFIL[distanceRangée][distanceColonne].
+  // Les 4 premières couches reproduisent exactement les valeurs de l'ancien plateau 8x8 ;
+  // la 5e couche (nouvelles cases plus centrales du 10x10) suit le même dégradé,
+  // avec des valeurs neutres-basses — ajustable plus tard si besoin.
+  const PROFIL = [
+    [120, -20, 20,  5,  5],
+    [-20, -40, -5, -5, -5],
+    [ 20,  -5, 15,  3,  3],
+    [  5,  -5,  3,  3,  2],
+    [  5,  -5,  3,  2,  2]
   ];
+  function poids(l, c) {
+    const dl = Math.min(l, TAILLE - 1 - l);
+    const dc = Math.min(c, TAILLE - 1 - c);
+    return PROFIL[dl][dc];
+  }
 
   // Profondeur de recherche par niveau (niveau 1 = coup glouton bruité)
   const PROFONDEUR = {1: 1, 2: 2, 3: 4, 4: 6};
@@ -236,9 +243,10 @@
   // --- Logique du jeu ---
 
   function plateauInitial() {
-    const p = Array.from({length: 8}, () => Array(8).fill(VIDE));
-    p[3][3] = BLANC; p[3][4] = NOIR;
-    p[4][3] = NOIR;  p[4][4] = BLANC;
+    const p = Array.from({length: TAILLE}, () => Array(TAILLE).fill(VIDE));
+    const m = TAILLE / 2; // centre géométrique (5 pour un plateau 10x10)
+    p[m-1][m-1] = BLANC; p[m-1][m] = NOIR;
+    p[m][m-1] = NOIR;    p[m][m] = BLANC;
     return p;
   }
 
@@ -251,11 +259,11 @@
     for (const [dl, dc] of DIRS) {
       const ligne = [];
       let x = l + dl, y = c + dc;
-      while (x >= 0 && x < 8 && y >= 0 && y < 8 && p[x][y] === adv) {
+      while (x >= 0 && x < TAILLE && y >= 0 && y < TAILLE && p[x][y] === adv) {
         ligne.push([x, y]);
         x += dl; y += dc;
       }
-      if (ligne.length && x >= 0 && x < 8 && y >= 0 && y < 8 && p[x][y] === couleur) {
+      if (ligne.length && x >= 0 && x < TAILLE && y >= 0 && y < TAILLE && p[x][y] === couleur) {
         retournes.push(...ligne);
       }
     }
@@ -264,8 +272,8 @@
 
   function coupsLegaux(p, couleur) {
     const coups = [];
-    for (let l = 0; l < 8; l++)
-      for (let c = 0; c < 8; c++)
+    for (let l = 0; l < TAILLE; l++)
+      for (let c = 0; c < TAILLE; c++)
         if (p[l][c] === VIDE && pionsRetournes(p, l, c, couleur).length)
           coups.push([l, c]);
     return coups;
@@ -294,21 +302,21 @@
     const ses = couleur === NOIR ? blanc : noir;
 
     // Fin de partie : seul le décompte compte
-    if (total === 64 || (!coupsLegaux(p, NOIR).length && !coupsLegaux(p, BLANC).length)) {
+    if (total === TAILLE * TAILLE || (!coupsLegaux(p, NOIR).length && !coupsLegaux(p, BLANC).length)) {
       return (mes - ses) * 10000;
     }
 
     let position = 0;
-    for (let l = 0; l < 8; l++)
-      for (let c = 0; c < 8; c++) {
-        if (p[l][c] === couleur) position += POIDS[l][c];
-        else if (p[l][c] === adv) position -= POIDS[l][c];
+    for (let l = 0; l < TAILLE; l++)
+      for (let c = 0; c < TAILLE; c++) {
+        if (p[l][c] === couleur) position += poids(l, c);
+        else if (p[l][c] === adv) position -= poids(l, c);
       }
 
     const mobilite = coupsLegaux(p, couleur).length - coupsLegaux(p, adv).length;
 
     // En fin de partie le matériel prend de l'importance
-    const phaseMateriel = total > 48 ? (mes - ses) * 6 : (mes - ses);
+    const phaseMateriel = total > TAILLE * TAILLE * 0.75 ? (mes - ses) * 6 : (mes - ses);
 
     return position + mobilite * 8 + phaseMateriel;
   }
@@ -356,7 +364,7 @@
       if (Math.random() < 0.35) return coups[Math.floor(Math.random() * coups.length)];
       let meilleur = coups[0], max = -Infinity;
       for (const [l, c] of coups) {
-        const g = pionsRetournes(p, l, c, couleur).length + POIDS[l][c] / 20;
+        const g = pionsRetournes(p, l, c, couleur).length + poids(l, c) / 20;
         if (g > max) { max = g; meilleur = [l, c]; }
       }
       return meilleur;
@@ -364,7 +372,7 @@
 
     // Fin de partie : résolution exacte si peu de cases restantes
     const {noir, blanc} = compter(p);
-    const vides = 64 - noir - blanc;
+    const vides = TAILLE * TAILLE - noir - blanc;
     let prof = PROFONDEUR[niveau];
     if (niveau >= 3 && vides <= 10) prof = vides;
 
@@ -376,8 +384,8 @@
 
   function construirePlateau() {
     elPlateau.innerHTML = '';
-    for (let l = 0; l < 8; l++)
-      for (let c = 0; c < 8; c++) {
+    for (let l = 0; l < TAILLE; l++)
+      for (let c = 0; c < TAILLE; c++) {
         const div = document.createElement('div');
         div.className = 'case';
         div.dataset.l = l;
@@ -388,11 +396,11 @@
   }
 
   function rendre(coupsJouables = []) {
-    const jouablesSet = new Set(coupsJouables.map(([l, c]) => l * 8 + c));
+    const jouablesSet = new Set(coupsJouables.map(([l, c]) => l * TAILLE + c));
     for (const div of elPlateau.children) {
       const l = +div.dataset.l, c = +div.dataset.c;
       const v = plateau[l][c];
-      div.classList.toggle('jouable', jouablesSet.has(l * 8 + c));
+      div.classList.toggle('jouable', jouablesSet.has(l * TAILLE + c));
       div.classList.toggle('dernier-coup', !!dernierCoup && dernierCoup[0] === l && dernierCoup[1] === c);
 
       let pion = div.querySelector('.pion');
